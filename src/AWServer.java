@@ -1,9 +1,6 @@
 import javax.net.ssl.*;
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.security.*;
-import java.security.cert.CertificateException;
 import java.util.Properties;
 
 public class AWServer {
@@ -12,10 +9,14 @@ public class AWServer {
             System.out.println("Please provide the path to the server config file as a command-line argument.");
             return;
         }
+
         //Config Parameters
         final String DIRECTORY_PATH_KEY = "directoryPath";
         final String SERVER_PORT_KEY = "serverPort";
+        final String KEYSTORE_PATH = "keystorePath";
+        final String KEYSTORE_PASS = "keystorePass";
 
+        //Read the parameters
         String configFilePath = args[0];
 
         Properties configProperties = new Properties();
@@ -28,14 +29,18 @@ public class AWServer {
             return;
         }
 
+        //Set the parameters
         String directoryPath = configProperties.getProperty(DIRECTORY_PATH_KEY);
         int serverPort = Integer.parseInt(configProperties.getProperty(SERVER_PORT_KEY));
+        String keystorePath = configProperties.getProperty(KEYSTORE_PATH);
+        String keystorePass = configProperties.getProperty(KEYSTORE_PASS);
 
+        //Set up our socket to listen on for messages from the client
         try {
             //SSLSocket setup
-            char[] keystorePassword = "qwerty".toCharArray();
+            char[] keystorePassword = keystorePass.toCharArray();
             KeyStore keystore = KeyStore.getInstance("JKS");
-            keystore.load(new FileInputStream("C:\\Users\\Drew\\IdeaProjects\\AWTest\\src\\serverkeystore.jks"), keystorePassword);
+            keystore.load(new FileInputStream(keystorePath), keystorePassword);
 
             // Create and initialize SSLContext
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -69,17 +74,28 @@ public class AWServer {
             e.printStackTrace();
         }
     }
+
+    /**
+     * Handles communication with an incoming client socket.
+     *
+     * @param clientSocket    The client socket to handle communication with.
+     * @param writeDirectory  The directory where the processed data will be written.
+     * @throws IOException    If an I/O error occurs during communication.
+     */
     private static void clientHandler(SSLSocket clientSocket, String writeDirectory) throws IOException {
+        //Make a BufferedReader to grab the client message since it is a String.
         try (
                 InputStream inputStream = clientSocket.getInputStream();
                 InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
                 BufferedReader reader = new BufferedReader(inputStreamReader)
         ) {
             String receivedData = reader.readLine();
-            System.out.println(receivedData);
-            String[] properties = receivedData.split("\\|");
-            String fileName = properties[0];
 
+            //Since the data is | delimited we split on that to get the various lines we need.
+            String[] properties = receivedData.split("\\|");
+            //The filename will always be first, so grab that.
+            String fileName = properties[0];
+            //Generate tShe new file with the given driectory and the filename from the client.
             File outputFile = new File(writeDirectory,fileName);
 
             try (FileWriter writer = new FileWriter(outputFile)) {
@@ -91,7 +107,7 @@ public class AWServer {
 
             System.out.println("Wrote filtered properties file: " + writeDirectory + fileName);
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
         finally {
