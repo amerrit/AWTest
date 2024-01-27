@@ -1,6 +1,9 @@
+import javax.net.ssl.*;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.*;
+import java.security.cert.CertificateException;
 import java.util.Properties;
 
 public class AWServer {
@@ -29,29 +32,51 @@ public class AWServer {
         int serverPort = Integer.parseInt(configProperties.getProperty(SERVER_PORT_KEY));
 
         try {
-            ServerSocket serverSocket = new ServerSocket(serverPort);
+            //SSLSocket setup
+            char[] keystorePassword = "qwerty".toCharArray();
+            KeyStore keystore = KeyStore.getInstance("JKS");
+            keystore.load(new FileInputStream("C:\\Users\\Drew\\IdeaProjects\\AWTest\\src\\serverkeystore.jks"), keystorePassword);
+
+            // Create and initialize SSLContext
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keystore, keystorePassword);
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(keystore);
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+            // Create SSLServerSocketFactory
+            SSLServerSocketFactory sslServerSocketFactory = sslContext.getServerSocketFactory();
+
+            SSLServerSocket serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(serverPort);
             while (true) {
                 // Accept a new client connection
-                Socket clientSocket = serverSocket.accept();
+                SSLSocket clientSocket = (SSLSocket)serverSocket.accept();
 
                 // Create a new thread to handle communication with the client
-                Thread clientThread = new Thread(() -> clientHandler(clientSocket,directoryPath));
+                Thread clientThread = new Thread(() -> {
+                    try {
+                        clientHandler(clientSocket,directoryPath);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
                 clientThread.start();
             }
         }
-        catch (IOException e) {
+        catch (Exception e) {
             e.printStackTrace();
         }
-
-
     }
-    private static void clientHandler(Socket clientSocket, String writeDirectory) {
+    private static void clientHandler(SSLSocket clientSocket, String writeDirectory) throws IOException {
         try (
                 InputStream inputStream = clientSocket.getInputStream();
                 InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
                 BufferedReader reader = new BufferedReader(inputStreamReader)
         ) {
             String receivedData = reader.readLine();
+            System.out.println(receivedData);
             String[] properties = receivedData.split("\\|");
             String fileName = properties[0];
 
@@ -66,10 +91,11 @@ public class AWServer {
 
             System.out.println("Wrote filtered properties file: " + writeDirectory + fileName);
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         finally {
+            clientSocket.close();
             System.out.println("Closing handler thread");
         }
     }

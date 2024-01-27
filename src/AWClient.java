@@ -1,9 +1,10 @@
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.*;
 import java.nio.file.*;
+import java.security.KeyStore;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,6 +47,21 @@ public class AWClient {
 
             System.out.println("Monitoring directory: " + directoryPath);
 
+            // Load client truststore
+            char[] truststorePassword = "qwerty".toCharArray();
+            KeyStore truststore = KeyStore.getInstance("JKS");
+            truststore.load(new FileInputStream("C:\\Users\\Drew\\IdeaProjects\\AWTest\\src\\clienttruststore.jks"), truststorePassword);
+
+            // Create and initialize SSLContext
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(truststore);
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, tmf.getTrustManagers(), null);
+
+            // Create SSLSocketFactory
+            SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+
             // Start an infinite loop to process events
             while (true) {
                 WatchKey key = watchService.take();
@@ -59,16 +75,17 @@ public class AWClient {
                         System.out.println("New file created: " + filePath);
 
                         String dataToSend = processFile(directoryPath.resolve(filePath), filteringPattern);
-                        try (Socket socket = new Socket(serverIP, serverPort)) {
+
+                        try (SSLSocket socket = (SSLSocket) sslSocketFactory.createSocket(serverIP, serverPort)) {
                             // Get the output stream from the socket
                             OutputStream outputStream = socket.getOutputStream();
 
                             // Convert the string to bytes and write to the output stream
                             byte[] messageBytes = dataToSend.getBytes();
+                            outputStream.flush();
                             outputStream.write(messageBytes);
 
                             System.out.println("String sent to server: " + dataToSend);
-
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -79,7 +96,7 @@ public class AWClient {
                 key.reset();
             }
 
-        } catch (IOException | InterruptedException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
