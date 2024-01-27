@@ -21,6 +21,7 @@ public class AWClient {
         final String SERVER_IP_KEY = "serverIP";
         final String SERVER_PORT_KEY = "serverPort";
 
+        //Read the parameters
         String configFilePath = args[0];
 
         Properties configProperties = new Properties();
@@ -32,6 +33,7 @@ public class AWClient {
             return;
         }
 
+        //Set the parameters
         Path directoryPath = Paths.get(configProperties.getProperty(DIRECTORY_PATH_KEY));
         String filteringPattern = configProperties.getProperty(FILTERING_PATTERN_KEY);
         String serverIP = configProperties.getProperty(SERVER_IP_KEY);
@@ -41,12 +43,12 @@ public class AWClient {
             // Create a WatchService
             WatchService watchService = FileSystems.getDefault().newWatchService();
 
-            // Register the directory for ENTRY_CREATE events
+            // Register the directory for ENTRY_CREATE events, since we are only watching for new files.
             directoryPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
 
             System.out.println("Monitoring directory: " + directoryPath);
 
-            // Start an infinite loop to process events
+            // Wait for an ENTRY_CREATE event
             while (true) {
                 WatchKey key = watchService.take();
 
@@ -58,7 +60,10 @@ public class AWClient {
                         Path filePath = (Path) event.context();
                         System.out.println("New file created: " + filePath);
 
+                        //Call processFile with the new file and our filter pattern to build the new String we will send
                         String dataToSend = processFile(directoryPath.resolve(filePath), filteringPattern);
+
+                        //Build our socket to the server as specified in the parameters
                         try (Socket socket = new Socket(serverIP, serverPort)) {
                             // Get the output stream from the socket
                             OutputStream outputStream = socket.getOutputStream();
@@ -84,6 +89,15 @@ public class AWClient {
         }
     }
 
+    /**
+     * Filters the contents of a file based on a specified filtering pattern and generates a
+     * new String in a | delimited format for our server to handle
+     *
+     * @param filePath         The path to the file to be processed.
+     * @param filteringPattern The regular expression pattern used for filtering.
+     * @return A string representing the filtered contents of the file in | delimited format.
+     * @throws IOException If an I/O error occurs while reading the file.
+     */
     private static String processFile(Path filePath, String filteringPattern) {
         StringBuilder stringBuilder = new StringBuilder();
         Pattern filter = Pattern.compile(filteringPattern);
@@ -91,8 +105,11 @@ public class AWClient {
             // Read the content of the file using BufferedReader
             BufferedReader reader = Files.newBufferedReader(filePath);
 
+            //Place the filename first, this is what the server will use to determine how to name the new file
             stringBuilder.append(filePath.getFileName().toString() + "|");
             String line;
+
+            //Go through line by line and append to the return string along with a |
             while ((line = reader.readLine()) != null) {
                 Matcher matcher = filter.matcher(line);
                 if (matcher.find()) {
@@ -100,10 +117,10 @@ public class AWClient {
                 }
             }
 
+            //Ensure we close the reader before deleting the file.
             reader.close();
+            //Delete the file when done
             Files.delete(filePath);
-
-
 
         } catch (IOException e) {
             e.printStackTrace();
