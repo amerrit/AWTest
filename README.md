@@ -1,6 +1,6 @@
-# Arctic Wolf Assignment
+# Filtering Demo
 
-This project was done as a demonstration for the technical team at Arctic Wolf - Scanning Engines. There are two branches for the project, the main branch is a demonstration without encryped connections and the encrypted branch demonstrates the same functionality using a TLS encrypted connection between the Client and Server.
+This project was done as a demonstration. There are two branches for the project, the main branch is a demonstration without encryped connections and the encrypted branch demonstrates the same functionality using a TLS encrypted connection between the Client and Server.
 
 ## Table of Contents
 
